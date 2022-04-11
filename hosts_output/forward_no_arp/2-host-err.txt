@@ -1,0 +1,1 @@
+bash: ./checker.py: Permission denied
