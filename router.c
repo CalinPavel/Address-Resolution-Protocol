@@ -1,45 +1,24 @@
 #include "queue.h"
 #include "skel.h"
 
-// int interfaces[ROUTER_NUM_INTERFACES];
+int interfaces[ROUTER_NUM_INTERFACES];
 
 // tabela de rutare
 struct route_table_entry *rtable;
 int rtable_len;
 
-// Mac table
+// Arp table
 struct arp_entry *arp_table;
 int arp_table_len;
 
-// struct route_table_entry *get_best_route(uint16_t proto, struct in_addr dest_ip, struct in6_addr dest_ip6)
-// {
-// 	struct route_table_entry *best_match = NULL;
 
-// 	for (int i = 0; i < rtable_len; i++)
-// 	{
-// 		if (rtable[i].proto == 4 && (rtable[i].netmask.s_addr & dest_ip.s_addr) ==
-// 										rtable[i].network.s_addr)
-// 		{
-// 			if (best_match == NULL)
-// 				best_match = &rtable[i];
-// 			else if (ntohl(best_match->netmask.s_addr) < ntohl(rtable[i].netmask.s_addr))
-// 				best_match = &rtable[i];
-// 			else if (best_match->netmask.s_addr == rtable[i].netmask.s_addr &&
-// 					 best_match->metric < rtable[i].metric)
-// 				best_match = &rtable[i];
-// 		}
-// 	}
-
-// 	return best_match;
-// }
-
-struct route_table_entry *get_best(struct in_addr dest_ip)
+struct route_table_entry *get_best(uint32_t dest_ip)
 {
 	struct route_table_entry *best_match = NULL;
 
 	for (int i = 0; i < rtable_len; i++)
 	{
-		if ((rtable[i].mask & dest_ip.s_addr) == rtable[i].prefix)
+		if ((rtable[i].mask & dest_ip) == rtable[i].prefix)
 		{
 			if (best_match == NULL)
 				best_match = &rtable[i];
@@ -50,11 +29,11 @@ struct route_table_entry *get_best(struct in_addr dest_ip)
 	return best_match;
 }
 
-struct arp_entry *get_arp_entry(struct in_addr dest_ip)
+struct arp_entry *get_arp_entry(uint32_t dest_ip)
 {
 	for (int i = 0; i < arp_table_len; i++)
 	{
-		if (arp_table[i].ip == dest_ip.s_addr)
+		if (arp_table[i].ip == dest_ip)
 			return &arp_table[i];
 	}
 
@@ -68,11 +47,14 @@ int main(int argc, char *argv[])
 	packet m;
 	int rc;
 
+	// Do not modify this line
+	init(argc - 2, argv + 2);
+
 	rtable = malloc(sizeof(struct route_table_entry) * 100000);
 	DIE(rtable == NULL, "memory");
 
 	// coada
-	queue q = queue_create();
+	// queue q = queue_create();
 
 	arp_table = malloc(sizeof(struct arp_entry) * 50000);
 	DIE(arp_table == NULL, "memory");
@@ -80,8 +62,7 @@ int main(int argc, char *argv[])
 	// len
 	rtable_len = read_rtable("rtable0.txt", rtable);
 	arp_table_len = parse_arp_table("arp_table.txt", arp_table);
-	// Do not modify this line
-	init(argc - 2, argv + 2);
+	
 
 	while (1)
 	{
@@ -135,21 +116,22 @@ int main(int argc, char *argv[])
 			// 	continue;
 			// }
 
-			struct in_addr daddr;
-			daddr.s_addr = ip_hdr->daddr;
+			// struct in_addr daddr;
+			// daddr.s_addr = ip_hdr->daddr;
 
-			struct route_table_entry *best_match = get_best(daddr);
+			struct route_table_entry *best_match = get_best(ip_hdr->daddr);
 
 			if (!best_match)
 				continue;
 
-			daddr.s_addr = best_match->next_hop;
+			// struct in_addr best;
+			// best.s_addr= best_match->next_hop;
 
-			struct arp_entry *arp_e = get_arp_entry(daddr);
+			struct arp_entry *arp_e = get_arp_entry(best_match->next_hop);
 
-			memcpy(eth_hdr->ether_dhost, arp_e->mac, sizeof(arp_e->mac));
-			get_interface_mac(best_match->interface, eth_hdr->ether_shost);
-
+			memcpy(eth_hdr->ether_dhost, arp_e->mac, 6);
+			get_interface_mac( best_match->interface,eth_hdr->ether_shost);
+			m.interface = best_match->interface;
 			send_packet(&m);
 
 			// 	struct icmp *icmp_header = (struct icmp *)(m.payload + sizeof(struct ether_header) + sizeof(struct iphdr));
