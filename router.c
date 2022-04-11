@@ -60,7 +60,7 @@ int main(int argc, char *argv[])
 	DIE(arp_table == NULL, "memory");
 
 	// len
-	rtable_len = read_rtable("rtable0.txt", rtable);
+	rtable_len = read_rtable( argv[1], rtable);
 	arp_table_len = parse_arp_table("arp_table.txt", arp_table);
 	
 
@@ -116,22 +116,42 @@ int main(int argc, char *argv[])
 			// 	continue;
 			// }
 
+			if ( ip_checksum((void *) ip_hdr ,sizeof(struct iphdr)) != 0)
+					continue;
+			
+			if (ip_hdr->ttl <= 1)
+			{
+				continue;
+			}
+			
 			// struct in_addr daddr;
 			// daddr.s_addr = ip_hdr->daddr;
 
 			struct route_table_entry *best_match = get_best(ip_hdr->daddr);
+			// printf("Best next hop");
+			// printf("%u" ,best_match->next_hop);
+
 
 			if (!best_match)
 				continue;
 
-			// struct in_addr best;
-			// best.s_addr= best_match->next_hop;
 
 			struct arp_entry *arp_e = get_arp_entry(best_match->next_hop);
+			// printf("Arp next hop");
+			// printf("%u" ,arp_e->ip);
+
+			if(arp_e == NULL)
+				continue;
+
+		
+			ip_hdr->ttl--;
+			ip_hdr->check = 0;
+			ip_hdr->check = ip_checksum((void *) ip_hdr , sizeof(struct iphdr) );
 
 			memcpy(eth_hdr->ether_dhost, arp_e->mac, 6);
 			get_interface_mac( best_match->interface,eth_hdr->ether_shost);
 			m.interface = best_match->interface;
+
 			send_packet(&m);
 
 			// 	struct icmp *icmp_header = (struct icmp *)(m.payload + sizeof(struct ether_header) + sizeof(struct iphdr));
